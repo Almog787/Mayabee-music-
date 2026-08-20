@@ -614,7 +614,7 @@ export default function App() {
 
               return (
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-6 text-sm font-bold text-gray-400 uppercase tracking-widest">
-                  <span>{t.key}: <span className="text-black">{renderKey(kit.key)}</span></span>
+                  <span>{t.emotion}: <span className="text-black">{selectedEmotion !== "Emotion" && selectedEmotion !== "רגש" ? t.emotions[selectedEmotion as keyof typeof t.emotions] : kit.key}</span></span>
                   <span>{t.tempo}: <span className="text-black">{kit.tempo} BPM</span></span>
                   {selectedVibe !== "Vibe" && <span>{t.vibe}: <span className="text-black">{t.vibes[selectedVibe as keyof typeof t.vibes]}</span></span>}
                   <span>{t.status}: <span className="text-black">{statusValue}</span></span>
