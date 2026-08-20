@@ -129,6 +129,10 @@ class AudioEngine {
     this.synths.clear();
     this.sequences.forEach(s => s.dispose());
     this.sequences.clear();
+    
+    this.stopTimeouts.forEach(t => clearTimeout(t));
+    this.stopTimeouts.clear();
+    this.targetVolumes.clear();
 
     Tone.Transport.bpm.value = kit.tempo;
 

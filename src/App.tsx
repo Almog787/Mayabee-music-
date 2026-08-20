@@ -7,9 +7,9 @@ import { generateOfflineKit } from './kitGenerator';
 const TRANSLATIONS = {
   en: {
     title: "Byte Beats",
-    subtitleWelcome: "Make your own retro 8-bit music beats! Pick a vibe, choose a key, and jam out on the pads. Play around with the effects to shape your sound.",
+    subtitleWelcome: "Make your own retro 8-bit music beats! Pick a vibe, choose an emotion, and jam out on the pads. Play around with the effects to shape your sound.",
     subtitleReady: "Tap the pads below to start playing your music!",
-    key: "KEY",
+    emotion: "EMOTION",
     vibe: "VIBE",
     generate: "CREATE MUSIC",
     synthesizing: "MAKING BEATS...",
@@ -33,29 +33,23 @@ const TRANSLATIONS = {
     reverb: "REVERB",
     welcomeLoading: "Welcome! Once the music pads load, tap them to create fun beats that you can record and download. Have fun!",
     credit: "Built by AlSh",
-    scaleDesc: {
-      major: " (Happy/Bright)",
-      minor: " (Dark/Moody)",
-      random: " (Surprise me)"
+    emotions: {
+      "Happy": "Happy",
+      "Sad": "Sad",
+      "Tense": "Tense",
+      "Chill": "Chill"
     },
     vibes: {
-      "Latin Pop Hit": "Latin Pop Hit",
-      "Reggaeton": "Reggaeton",
-      "Random": "Random",
-      "Boss Battle": "Boss Battle",
-      "Spooky Dungeon": "Spooky Dungeon",
-      "Upbeat Platformer": "Upbeat Platformer",
-      "Chill Village": "Chill Village",
-      "Cyberpunk City": "Cyberpunk City",
-      "Underwater Level": "Underwater Level",
-      "Space Shooter": "Space Shooter"
+      "Pop": "Pop",
+      "Electronic": "Electronic",
+      "Hip Hop": "Hip Hop"
     }
   },
   he: {
     title: "בייט ביטס",
-    subtitleWelcome: "צרו מוזיקת 8-ביט רטרו משלכם בקלות! בחרו אווירה, בחרו סולם מוזיקלי, ותתחילו לנגן על הפדים. שחקו עם האפקטים כדי לשנות את הסאונד.",
+    subtitleWelcome: "צרו מוזיקת 8-ביט רטרו משלכם בקלות! בחרו אווירה, בחרו רגש, ותתחילו לנגן על הפדים. שחקו עם האפקטים כדי לשנות את הסאונד.",
     subtitleReady: "לחצו על הפדים למטה כדי להתחיל לנגן!",
-    key: "סולם",
+    emotion: "רגש",
     vibe: "אווירה",
     generate: "צור מוזיקה",
     synthesizing: "מייצר סאונד...",
@@ -79,22 +73,16 @@ const TRANSLATIONS = {
     reverb: "הדהוד",
     welcomeLoading: "ברוכים הבאים! כשהפדים ייטענו, תוכלו ללחוץ עליהם כדי ליצור מקצבים מגניבים שאפשר גם להקליט ולהוריד. תהנו!",
     credit: "האתר נבנה עלידי AlSh",
-    scaleDesc: {
-      major: " (שמח)",
-      minor: " (אפל/רגשי)",
-      random: " (הפתעה)"
+    emotions: {
+      "Happy": "שמח",
+      "Sad": "עצוב",
+      "Tense": "מותח",
+      "Chill": "רגוע"
     },
     vibes: {
-      "Latin Pop Hit": "להיט פופ לטיני",
-      "Reggaeton": "רגטון",
-      "Random": "אקראי",
-      "Boss Battle": "קרב בוס",
-      "Spooky Dungeon": "צינוק מפחיד",
-      "Upbeat Platformer": "פלטפורמר קצבי",
-      "Chill Village": "כפר רגוע",
-      "Cyberpunk City": "עיר סייברפאנק",
-      "Underwater Level": "שלב מים",
-      "Space Shooter": "חללית יריות"
+      "Pop": "פופ",
+      "Electronic": "אלקטרוני",
+      "Hip Hop": "היפ הופ"
     }
   }
 };
@@ -178,8 +166,8 @@ const PixelGrid = ({ active, padId }: { active: boolean; padId: number }) => {
   );
 };
 
-const KEYS = ["Random", "C Major", "C Minor", "D Major", "D Minor", "E Minor", "F Major", "F# Minor", "G Major", "G Minor", "A Major", "A Minor", "Bb Major", "B Minor"];
-const VIBES = ["Latin Pop Hit", "Reggaeton", "Random", "Boss Battle", "Spooky Dungeon", "Upbeat Platformer", "Chill Village", "Cyberpunk City", "Underwater Level", "Space Shooter"];
+const EMOTIONS = ["Happy", "Sad", "Tense", "Chill"];
+const VIBES = ["Pop", "Electronic", "Hip Hop"];
 
 const XYPad = ({ title1, title2, initialX = 0.5, initialY = 0.5, onChange }: { title1: string, title2: string, initialX?: number, initialY?: number, onChange: (x: number, y: number) => void }) => {
   const [x, setX] = useState(initialX);
@@ -350,24 +338,6 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
-  const renderKey = (k: string) => {
-    let desc = "";
-    if (k === "Random") {
-      desc = t.scaleDesc.random;
-    } else if (k.includes("Major")) {
-      desc = t.scaleDesc.major;
-    } else if (k.includes("Minor")) {
-      desc = t.scaleDesc.minor;
-    }
-
-    if (lang !== 'he') {
-      return `${k}${desc}`;
-    }
-
-    const translatedKey = k.replace('Major', "מז'ור").replace('Minor', 'מינור').replace('Random', 'אקראי');
-    return `${translatedKey}${desc}`;
-  };
-
   const [kit, setKit] = useState<KitConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const [activePads, setActivePads] = useState<Set<number>>(new Set());
@@ -388,7 +358,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isRecording]);
   
-  const [selectedKey, setSelectedKey] = useState("Keys");
+  const [selectedEmotion, setSelectedEmotion] = useState("Emotion");
   const [selectedVibe, setSelectedVibe] = useState("Vibe");
   
   const [padVolumes, setPadVolumes] = useState<Record<number, number>>({});
@@ -445,7 +415,7 @@ export default function App() {
       
       // Simulate artificial delay for generation effect
       await new Promise(res => setTimeout(res, 800));
-      const data = generateOfflineKit(selectedVibe, selectedKey);
+      const data = generateOfflineKit(selectedVibe, selectedEmotion);
       
       setKit(data);
       
@@ -519,13 +489,13 @@ export default function App() {
               <div className="w-full flex flex-col md:items-center gap-[16px]">
                 <div className="w-full flex flex-col md:flex-row gap-[6px]">
                   <select 
-                    value={selectedKey}
-                    onChange={(e) => setSelectedKey(e.target.value)}
+                    value={selectedEmotion}
+                    onChange={(e) => setSelectedEmotion(e.target.value)}
                     disabled={loading}
                     className="w-full px-8 h-16 rounded-[110px] border-4 border-black bg-white appearance-none text-center text-black text-2xl font-bold font-rose leading-6 cursor-pointer outline-none"
                   >
-                    <option value="Keys">{t.key}</option>
-                    {KEYS.map(k => <option key={k} value={k}>{renderKey(k)}</option>)}
+                    <option value="Emotion">{t.emotion}</option>
+                    {EMOTIONS.map(e => <option key={e} value={e}>{t.emotions[e as keyof typeof t.emotions]}</option>)}
                   </select>
 
                   <select 
@@ -554,13 +524,13 @@ export default function App() {
             {kit && (
               <>
                 <select 
-                  value={selectedKey}
-                  onChange={(e) => setSelectedKey(e.target.value)}
+                  value={selectedEmotion}
+                  onChange={(e) => setSelectedEmotion(e.target.value)}
                   disabled={loading}
                   className="px-4 py-3 h-12 rounded-full border-2 border-black bg-white text-black font-bold font-rose cursor-pointer outline-none appearance-none text-center min-w-[100px]"
                 >
-                  <option value="Keys">{t.key}</option>
-                  {KEYS.map(k => <option key={k} value={k}>{renderKey(k)}</option>)}
+                  <option value="Emotion">{t.emotion}</option>
+                  {EMOTIONS.map(e => <option key={e} value={e}>{t.emotions[e as keyof typeof t.emotions]}</option>)}
                 </select>
 
                 <select 
