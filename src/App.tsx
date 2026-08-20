@@ -14,6 +14,8 @@ const TRANSLATIONS = {
     generate: "CREATE MUSIC",
     synthesizing: "MAKING BEATS...",
     regenerate: "New Sounds",
+    autoMix: "Auto-Mix",
+    vol: "VOL",
     record: "Record",
     warmingUp: "WARMING UP",
     inTheGroove: "IN THE GROOVE",
@@ -37,6 +39,8 @@ const TRANSLATIONS = {
       random: " (Surprise me)"
     },
     vibes: {
+      "Latin Pop Hit": "Latin Pop Hit",
+      "Reggaeton": "Reggaeton",
       "Random": "Random",
       "Boss Battle": "Boss Battle",
       "Spooky Dungeon": "Spooky Dungeon",
@@ -56,6 +60,8 @@ const TRANSLATIONS = {
     generate: "צור מוזיקה",
     synthesizing: "מייצר סאונד...",
     regenerate: "צלילים חדשים",
+    autoMix: "איזון אוטומטי",
+    vol: "עוצמה",
     record: "הקלט",
     warmingUp: "מתחממים",
     inTheGroove: "בגרוב",
@@ -79,6 +85,8 @@ const TRANSLATIONS = {
       random: " (הפתעה)"
     },
     vibes: {
+      "Latin Pop Hit": "להיט פופ לטיני",
+      "Reggaeton": "רגטון",
       "Random": "אקראי",
       "Boss Battle": "קרב בוס",
       "Spooky Dungeon": "צינוק מפחיד",
@@ -92,101 +100,86 @@ const TRANSLATIONS = {
 };
 
 const PixelGrid = ({ active, padId }: { active: boolean; padId: number }) => {
-  const [frame, setFrame] = useState(0);
-
+  const containerRef = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
-    if (!active) return;
-    let req: number;
-    let lastTime = performance.now();
-    const animate = (time: number) => {
-      if (time - lastTime > 100) { // 10fps
-        setFrame(f => f + 1);
-        lastTime = time;
+    if (!active) {
+      if (containerRef.current) {
+        const bars = containerRef.current.children;
+        for (let i = 0; i < bars.length; i++) {
+          (bars[i].firstChild as HTMLElement).style.height = '10%';
+        }
       }
+      return;
+    }
+
+    let req: number;
+    let startTime = performance.now();
+    
+    const animate = (time: number) => {
+      if (!containerRef.current) return;
+      const t = (time - startTime) * 0.005;
+      const bars = containerRef.current.children;
+      
+      const speedMult = 1 + (padId % 3) * 0.3;
+      const scaledT = t * speedMult;
+
+      for (let i = 0; i < bars.length; i++) {
+        let height = 0;
+        if (padId % 4 === 0) { // Kick / impact
+          height = 40 + Math.sin(scaledT * 2 + i * 0.5) * 40 + Math.cos(scaledT * 4) * 20;
+        } else if (padId % 4 === 1) { // Snare / chaotic
+          height = 30 + Math.random() * 50 + Math.sin(scaledT + i) * 20;
+        } else if (padId % 4 === 2) { // Bass / smooth wave
+          height = 50 + Math.sin(scaledT * 0.8 + i * 0.3) * 45;
+        } else { // Lead / sharp peaks
+          height = 30 + Math.abs(Math.sin(scaledT * 1.5 + i * 0.6)) * 70;
+        }
+        
+        height = Math.max(10, Math.min(100, height));
+        (bars[i].firstChild as HTMLElement).style.height = `${height}%`;
+      }
+      
       req = requestAnimationFrame(animate);
     };
+    
     req = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(req);
-  }, [active]);
+  }, [active, padId]);
 
-  const rows = 8;
-  const cols = 20;
-
-  // color logic based on frame, padId, and row/col
-  const getColor = (r: number, c: number) => {
-    if (!active) {
-      // Generate some pseudo-random height map based on padId
-      const hash1 = Math.sin(padId * 12.9898 + c * 78.233) * 43758.5453;
-      const hash2 = Math.sin(padId * 39.346 + c * 11.233) * 43758.5453;
-      
-      // We want blocky terrain, so we can group columns together (e.g., width of 2 or 3)
-      const blockC = Math.floor(c / 2);
-      const bHash1 = Math.sin(padId * 12.9898 + blockC * 78.233) * 43758.5453;
-      const bHash2 = Math.sin(padId * 39.346 + blockC * 11.233) * 43758.5453;
-
-      const h1 = Math.floor(2 + (bHash1 - Math.floor(bHash1)) * 3); // Magenta layer
-      const h2 = Math.floor(4 + (bHash2 - Math.floor(bHash2)) * 3); // Orange layer
-
-      if (r >= h2) return 'bg-[#f0a500]'; // orange
-      if (r >= h1) return 'bg-[#e649b8]'; // magenta
-      return 'bg-[#2a3033]'; // dark gray
-    }
-    
-    // animate dynamically
-    const styleType = padId % 4;
-    const time = frame * (1 + (padId % 2));
-    
-    if (styleType === 0) {
-      // falling cascading blocks
-      const v = (r - time + c * 3 + padId * 7) % 8;
-      if (v === 0) return 'bg-[#00d0e6]';
-      if (v === 1) return 'bg-[#e649b8]';
-      if (v > 5) return 'bg-[#f0a500]';
-      return 'bg-[#2a3033]';
-    } else if (styleType === 1) {
-      // scrolling horizontal terrain
-      const scrollC = c + time;
-      const blockC = Math.floor(scrollC / 2);
-      const bHash1 = Math.sin(padId * 12.9898 + blockC * 78.233) * 43758.5453;
-      const wave = Math.floor(3 + (bHash1 - Math.floor(bHash1)) * 4);
-      
-      if (r >= wave + 2) return 'bg-[#f0a500]';
-      if (r >= wave) return 'bg-[#e649b8]';
-      if (r === wave - 1) return 'bg-[#00d0e6]';
-      return 'bg-[#2a3033]';
-    } else if (styleType === 2) {
-      // radiating pulses
-      const dist = Math.abs(r - 4) + Math.abs(c - 10);
-      const v = (dist - time + 20) % 8;
-      if (v === 0) return 'bg-[#00d0e6]';
-      if (v === 1 || v === 2) return 'bg-[#e649b8]';
-      if (v === 3 || v === 4) return 'bg-[#f0a500]';
-      return 'bg-[#2a3033]';
-    } else {
-      // random noise bursts with structure
-      const noise = (r * 13 + c * 17 + time * 23 + padId * 31) % 100;
-      if (noise < 10) return 'bg-[#00d0e6]';
-      if (noise < 30) return 'bg-[#e649b8]';
-      if (noise < 60) return 'bg-[#f0a500]';
-      return 'bg-[#2a3033]';
-    }
-  };
+  const numBars = 16;
+  const colors = [
+    'from-[#ff3366] to-[#ff9933]', // warm pop
+    'from-[#00c6ff] to-[#0072ff]', // cool blue
+    'from-[#11998e] to-[#38ef7d]', // green groove
+    'from-[#8E2DE2] to-[#4A00E0]', // deep purple
+    'from-[#f12711] to-[#f5af19]', // fiery red
+    'from-[#fc00ff] to-[#00dbde]', // synthwave
+    'from-[#ffe259] to-[#ffa751]', // golden sunset
+    'from-[#4CB8C4] to-[#3CD3AD]'  // minty fresh
+  ];
+  // Safe indexing for padId
+  const colorClass = colors[((padId || 1) - 1) % colors.length] || colors[0];
 
   return (
-    <div className="w-full grid gap-[1px] bg-[#1f2426] p-[1px]" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-      {Array.from({ length: rows * cols }).map((_, i) => {
-        const r = Math.floor(i / cols);
-        const c = i % cols;
-        return (
-          <div key={i} className={`w-full aspect-square ${getColor(r, c)}`} />
-        );
-      })}
+    <div 
+      className="w-full h-full min-h-[80px] bg-[#1a1c23] rounded-lg flex items-end justify-between px-3 py-3 gap-[2px] overflow-hidden relative shadow-inner" 
+      ref={containerRef}
+    >
+      {Array.from({ length: numBars }).map((_, i) => (
+        <div key={i} className="w-full flex items-end justify-center h-full">
+          <div 
+            className={`w-full rounded-full bg-gradient-to-t ${active ? colorClass : 'from-gray-700 to-gray-600'} transition-colors duration-300`}
+            style={{ height: '10%', willChange: 'height' }}
+          />
+        </div>
+      ))}
     </div>
   );
 };
 
 const KEYS = ["Random", "C Major", "C Minor", "D Major", "D Minor", "E Minor", "F Major", "F# Minor", "G Major", "G Minor", "A Major", "A Minor", "Bb Major", "B Minor"];
-const VIBES = ["Random", "Boss Battle", "Spooky Dungeon", "Upbeat Platformer", "Chill Village", "Cyberpunk City", "Underwater Level", "Space Shooter"];
+const VIBES = ["Latin Pop Hit", "Reggaeton", "Random", "Boss Battle", "Spooky Dungeon", "Upbeat Platformer", "Chill Village", "Cyberpunk City", "Underwater Level", "Space Shooter"];
 
 const XYPad = ({ title1, title2, initialX = 0.5, initialY = 0.5, onChange }: { title1: string, title2: string, initialX?: number, initialY?: number, onChange: (x: number, y: number) => void }) => {
   const [x, setX] = useState(initialX);
@@ -312,6 +305,35 @@ const StudioFader = ({ title1, title2, initialValue = 0, onChange }: { title1: s
   );
 };
 
+const PadVolumeSlider = ({ padId, volume, label, onChange }: { padId: number; volume: number; label: string; onChange: (id: number, val: number) => void }) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    onChange(padId, val);
+  };
+
+  return (
+    <div 
+      className="mt-3 flex items-center gap-2 w-full pr-4 rtl:pl-4 rtl:pr-0" 
+      onClick={e => e.stopPropagation()} 
+      onPointerDown={e => e.stopPropagation()}
+    >
+      <span className="text-[10px] font-black font-mono-ibm text-gray-500 uppercase tracking-widest w-8">{label}</span>
+      <input 
+        type="range" 
+        min="-30" 
+        max="6" 
+        step="1"
+        value={volume} 
+        onChange={handleChange}
+        className="w-full h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+        style={{
+          accentColor: 'black'
+        }}
+      />
+    </div>
+  );
+};
+
 export default function App() {
   const [lang, setLang] = useState<'en' | 'he'>('en');
 
@@ -368,6 +390,45 @@ export default function App() {
   
   const [selectedKey, setSelectedKey] = useState("Keys");
   const [selectedVibe, setSelectedVibe] = useState("Vibe");
+  
+  const [padVolumes, setPadVolumes] = useState<Record<number, number>>({});
+  const [isAutoMix, setIsAutoMix] = useState(true);
+
+  useEffect(() => {
+    if (!isAutoMix || !kit) return;
+    const activeCount = activePads.size;
+    
+    const newVolumes = { ...padVolumes };
+    let changed = false;
+    
+    kit.pads.forEach(pad => {
+      let targetVol = pad.synthParams.volume ?? -6;
+      
+      if (activeCount > 3) {
+        targetVol -= Math.min(6, (activeCount - 3) * 1.5);
+      }
+      
+      if (pad.type === 'lead') {
+        targetVol += 1.5;
+      } else if (pad.type === 'bass' && activeCount > 4) {
+        targetVol -= 1.5;
+      }
+      
+      if (newVolumes[pad.id] !== targetVol) {
+        newVolumes[pad.id] = targetVol;
+        audioEngine.setPadVolume(pad.id, targetVol);
+        changed = true;
+      }
+    });
+    
+    if (changed) setPadVolumes(newVolumes);
+  }, [activePads, isAutoMix]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleVolumeChange = (id: number, val: number) => {
+    setPadVolumes(prev => ({ ...prev, [id]: val }));
+    audioEngine.setPadVolume(id, val);
+    setIsAutoMix(false);
+  };
 
   const initAudio = async () => {
     if (!audioInitialized) {
@@ -387,7 +448,15 @@ export default function App() {
       const data = generateOfflineKit(selectedVibe, selectedKey);
       
       setKit(data);
-      audioEngine.loadKit(data);
+      
+      const initialVolumes: Record<number, number> = {};
+      data.pads.forEach(p => {
+        initialVolumes[p.id] = p.synthParams.volume ?? -6;
+      });
+      setPadVolumes(initialVolumes);
+      setIsAutoMix(true); // reset auto mix when generating new kit
+
+      await audioEngine.loadKit(data);
       setActivePads(new Set());
     } catch (err) {
       console.error(err);
@@ -517,10 +586,20 @@ export default function App() {
           {kit && (
             <button 
               onClick={toggleRecording}
-              className={`flex items-center justify-center space-x-2 px-6 py-3 h-12 rounded-full font-bold transition-all ${isRecording ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-black text-white hover:bg-gray-800'}`}
+              className={`flex items-center justify-center gap-2 px-6 py-3 h-12 rounded-full font-bold transition-all ${isRecording ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-black text-white hover:bg-gray-800'}`}
             >
               {isRecording ? <Square size={16} fill="currentColor" /> : <div className="w-3 h-3 rounded-full bg-red-500" />}
               <span>{isRecording ? `${recordSeconds} s` : t.record}</span>
+            </button>
+          )}
+
+          {kit && (
+            <button 
+              onClick={() => setIsAutoMix(!isAutoMix)}
+              className={`flex items-center justify-center gap-2 px-6 py-3 h-12 rounded-full font-bold transition-all ${isAutoMix ? 'bg-[#e5e5dd] text-black border-2 border-black' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 border-2 border-transparent'}`}
+            >
+              <Waves size={16} />
+              <span>{t.autoMix}</span>
             </button>
           )}
 
@@ -586,8 +665,8 @@ export default function App() {
                   >
                     {/* Left side */}
                     <div className={`relative flex-none w-[40%] flex flex-col justify-center transition-colors ${isActive ? 'bg-[#e5e5dd]' : 'bg-[#eeeee7]'}`}>
-                      {isActive && <div className="absolute left-0 top-0 bottom-0 w-4 bg-black" />}
-                      <div className={`${isActive ? 'pl-[30px] pr-6' : 'px-[30px]'}`}>
+                      {isActive && <div className="absolute left-0 rtl:left-auto rtl:right-0 top-0 bottom-0 w-4 bg-black" />}
+                      <div className={`${isActive ? 'pl-[30px] pr-6 rtl:pl-6 rtl:pr-[30px]' : 'px-[30px]'}`}>
                         <h2 className="font-rose uppercase font-black text-[17px] leading-none text-black mb-0">
                           {pad.name.split(' ').map((word, i) => (
                             <React.Fragment key={i}>
@@ -599,6 +678,13 @@ export default function App() {
                         <p className="font-sans text-gray-500 text-[14px] capitalize">
                           {pad.type}
                         </p>
+                        
+                        <PadVolumeSlider 
+                          padId={pad.id} 
+                          volume={padVolumes[pad.id] ?? (pad.synthParams.volume ?? -6)} 
+                          label={t.vol}
+                          onChange={handleVolumeChange}
+                        />
                       </div>
                     </div>
 

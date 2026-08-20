@@ -4,7 +4,17 @@ export interface PadConfig {
   id: number;
   name: string;
   type: string;
-  synthParams: { oscillatorType: string };
+  synthParams: { 
+    oscillatorType?: string;
+    instrumentType?: 'Synth' | 'FMSynth' | 'AMSynth' | 'MembraneSynth' | 'MetalSynth' | 'NoiseSynth' | 'PluckSynth' | 'Sampler';
+    samplerUrl?: string;
+    samplerInstrument?: string;
+    envelope?: any;
+    modulationEnvelope?: any;
+    harmonicity?: number;
+    modulationIndex?: number;
+    volume?: number;
+  };
   sequence: (string | null)[];
 }
 
@@ -27,6 +37,9 @@ class AudioEngine {
   private delay!: Tone.FeedbackDelay;
   private reverb!: Tone.Freeverb;
   private masterVolume!: Tone.Volume;
+  private eq!: Tone.EQ3;
+  private compressor!: Tone.Compressor;
+  private limiter!: Tone.Limiter;
   
   // Recording
   private recorder!: MediaRecorder;
@@ -37,6 +50,9 @@ class AudioEngine {
     if (this.isInitialized) return;
     await Tone.start();
     
+    // Set default lookahead for better scheduling
+    Tone.context.lookAhead = 0.1;
+
     // Master Bus
     this.filter = new Tone.Filter(20000, "lowpass");
     this.bitcrusher = new Tone.BitCrusher(4);
@@ -45,16 +61,40 @@ class AudioEngine {
     this.delay = new Tone.FeedbackDelay("8n", 0.5);
     this.delay.wet.value = 0;
     
-    this.reverb = new Tone.Freeverb();
-    this.reverb.wet.value = 0;
+    this.reverb = new Tone.Freeverb({
+      roomSize: 0.6,
+      dampening: 3000
+    });
+    this.reverb.wet.value = 0.12; // Natural room ambiance
+    
+    // High Quality Mastering Chain
+    this.eq = new Tone.EQ3({
+      low: 3.5, // Warmer, fuller bass punch
+      mid: -1.5, // Less muddy mid-range
+      high: 2.5 // Crisper, airier highs
+    });
+    
+    this.compressor = new Tone.Compressor({
+      threshold: -28,
+      ratio: 4,
+      attack: 0.005, // Fast enough to catch peaks, slow enough to let kick punch
+      release: 0.2  // Smooth glue pumping
+    });
+    
+    this.limiter = new Tone.Limiter(-1); // Prevent clipping
 
     this.masterVolume = new Tone.Volume(0).toDestination();
 
-    // Routing
-    this.filter.connect(this.bitcrusher);
-    this.bitcrusher.connect(this.delay);
-    this.delay.connect(this.reverb);
-    this.reverb.connect(this.masterVolume);
+    // Routing: Filter -> Effects -> EQ -> Compressor -> Limiter -> Output
+    this.filter.chain(
+      this.bitcrusher,
+      this.delay,
+      this.reverb,
+      this.eq,
+      this.compressor,
+      this.limiter,
+      this.masterVolume
+    );
 
     // Setup Recording
     const context = Tone.context.rawContext as AudioContext;
@@ -75,7 +115,7 @@ class AudioEngine {
     }
   }
 
-  loadKit(kit: KitConfig) {
+  async loadKit(kit: KitConfig) {
     if (!this.isInitialized) return;
     this.currentKit = kit;
 
@@ -94,31 +134,103 @@ class AudioEngine {
 
     kit.pads.forEach((pad) => {
       let synth;
-      // Setup Synth
-      if (pad.type === 'drum') {
-        synth = new Tone.MembraneSynth().connect(this.filter);
+      const instType = pad.synthParams.instrumentType;
+      
+      const getSynthClass = (type?: string) => {
+        switch(type) {
+          case 'FMSynth': return Tone.FMSynth;
+          case 'AMSynth': return Tone.AMSynth;
+          case 'PluckSynth': return Tone.PluckSynth;
+          case 'MetalSynth': return Tone.MetalSynth;
+          case 'NoiseSynth': return Tone.NoiseSynth;
+          case 'MembraneSynth': return Tone.MembraneSynth;
+          default: return Tone.Synth;
+        }
+      };
+
+      const SynthClass = getSynthClass(instType);
+      
+      const buildParams = () => {
+        const params: any = {};
+        if (pad.synthParams.oscillatorType && instType !== 'PluckSynth' && instType !== 'MetalSynth' && instType !== 'NoiseSynth') {
+          params.oscillator = { type: pad.synthParams.oscillatorType };
+        }
+        if (pad.synthParams.envelope) params.envelope = pad.synthParams.envelope;
+        if (pad.synthParams.modulationEnvelope) params.modulationEnvelope = pad.synthParams.modulationEnvelope;
+        if (pad.synthParams.harmonicity) params.harmonicity = pad.synthParams.harmonicity;
+        if (pad.synthParams.modulationIndex) params.modulationIndex = pad.synthParams.modulationIndex;
+        return params;
+      };
+
+      if (instType === 'Sampler') {
+        if (pad.synthParams.samplerUrl === 'drums') {
+          synth = new Tone.Sampler({
+            urls: {
+              "C1": "kick.mp3",
+              "E2": "snare.mp3",
+              "C2": "hihat.mp3",
+              "A1": "tom1.mp3",
+              "G1": "tom2.mp3",
+              "F1": "tom3.mp3"
+            },
+            baseUrl: "https://tonejs.github.io/audio/drum-samples/acoustic-kit/"
+          }).connect(this.filter);
+        } else {
+          const instName = pad.synthParams.samplerInstrument || 'acoustic_grand_piano';
+          synth = new Tone.Sampler({
+            urls: {
+              "A2": "A2.mp3",
+              "C3": "C3.mp3",
+              "F3": "F3.mp3",
+              "C4": "C4.mp3",
+              "F4": "F4.mp3",
+              "C5": "C5.mp3",
+              "F5": "F5.mp3",
+              "C6": "C6.mp3"
+            },
+            baseUrl: `https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/${instName}-mp3/`,
+            attack: 0.01,
+            release: pad.type === 'chord' ? 1.5 : (pad.type === 'bass' ? 0.8 : 0.5),
+            curve: "exponential"
+          }).connect(this.filter);
+        }
+      } else if (instType === 'NoiseSynth' || instType === 'MetalSynth') {
+        synth = new (SynthClass as any)(buildParams()).connect(this.filter);
+      } else if (pad.type === 'drum') {
+        synth = new (SynthClass as any)(buildParams()).connect(this.filter);
       } else if (pad.type === 'chord') {
-        synth = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: pad.synthParams.oscillatorType as any }
-        }).connect(this.filter);
+        synth = new Tone.PolySynth(SynthClass as any, buildParams()).connect(this.filter);
       } else {
-        synth = new Tone.Synth({
-          oscillator: { type: pad.synthParams.oscillatorType as any },
-          envelope: { attack: 0.05, decay: 0.1, sustain: 0.3, release: 1 }
-        }).connect(this.filter);
+        synth = new (SynthClass as any)(buildParams()).connect(this.filter);
       }
+      
+      if (pad.synthParams.volume !== undefined) {
+        synth.volume.value = pad.synthParams.volume;
+      } else {
+        synth.volume.value = -6; // default fallback
+      }
+      
       this.synths.set(pad.id, synth);
 
       // Setup Sequence
       const seq = new Tone.Sequence((time, note) => {
         if (!this.activePadIds.has(pad.id)) return;
         if (note && note !== 'null') {
-          if (pad.type === 'drum') {
-            (synth as Tone.MembraneSynth).triggerAttackRelease(note, "16n", time);
+          // Calculate a musical duration based on the pad type
+          let duration = "16n";
+          if (pad.type === 'chord') duration = "4n"; // ring out for a full beat
+          else if (pad.type === 'lead' || pad.type === 'bass') duration = "8n"; // ring out for half beat
+          
+          if (instType === 'NoiseSynth' || instType === 'MetalSynth') {
+            (synth as any).triggerAttackRelease(duration, time);
+          } else if (instType === 'Sampler') {
+            (synth as Tone.Sampler).triggerAttackRelease(note, duration, time);
+          } else if (pad.type === 'drum') {
+            (synth as Tone.MembraneSynth).triggerAttackRelease(note, duration, time);
           } else if (pad.type === 'chord') {
-            (synth as Tone.PolySynth).triggerAttackRelease([note], "16n", time);
+            (synth as Tone.PolySynth).triggerAttackRelease([note], duration, time);
           } else {
-            (synth as Tone.Synth).triggerAttackRelease(note, "16n", time);
+            (synth as any).triggerAttackRelease(note, duration, time);
           }
         }
       }, pad.sequence, "16n");
@@ -126,6 +238,9 @@ class AudioEngine {
       this.sequences.set(pad.id, seq);
       seq.start(0);
     });
+    
+    // Wait for all Samplers (and other buffers) to load before returning
+    await Tone.loaded();
   }
 
   private getActivePadCount(): number {
@@ -135,13 +250,22 @@ class AudioEngine {
   private triggerSynthNote(pad: PadConfig, note: string, time: number) {
     const synth = this.synths.get(pad.id);
     if (!synth) return;
+    const instType = pad.synthParams.instrumentType;
     try {
-      if (pad.type === 'drum') {
-        (synth as Tone.MembraneSynth).triggerAttackRelease(note, "16n", time);
+      let duration = "16n";
+      if (pad.type === 'chord') duration = "4n";
+      else if (pad.type === 'lead' || pad.type === 'bass') duration = "8n";
+
+      if (instType === 'NoiseSynth' || instType === 'MetalSynth') {
+        (synth as any).triggerAttackRelease(duration, time);
+      } else if (instType === 'Sampler') {
+        (synth as Tone.Sampler).triggerAttackRelease(note, duration, time);
+      } else if (pad.type === 'drum') {
+        (synth as Tone.MembraneSynth).triggerAttackRelease(note, duration, time);
       } else if (pad.type === 'chord') {
-        (synth as Tone.PolySynth).triggerAttackRelease([note], "16n", time);
+        (synth as Tone.PolySynth).triggerAttackRelease([note], duration, time);
       } else {
-        (synth as Tone.Synth).triggerAttackRelease(note, "16n", time);
+        (synth as any).triggerAttackRelease(note, duration, time);
       }
     } catch (e) {
       console.warn("Failed to trigger note", e);
@@ -157,11 +281,12 @@ class AudioEngine {
     if (this.getActivePadCount() === 0) {
       Tone.Transport.stop();
       Tone.Transport.position = "0:0:0";
-      Tone.Transport.start();
+      // Start slightly in the future for better scheduling/timing
+      Tone.Transport.start("+0.05");
       this.activePadIds.add(id);
 
       if (pad && firstNote && (pad.sequence[0] === null || pad.sequence[0] === 'null')) {
-        this.triggerSynthNote(pad, firstNote, Tone.now());
+        this.triggerSynthNote(pad, firstNote, Tone.now() + 0.05);
       }
     } else {
       this.activePadIds.add(id);
@@ -170,7 +295,7 @@ class AudioEngine {
           const parts = Tone.Transport.position.toString().split(':');
           const beat = parseInt(parts[1] || "0", 10);
           const sixteenth = parseInt(parts[2] || "0", 10);
-          const currentStep = (beat * 4 + sixteenth) % 16;
+          const currentStep = (beat * 4 + sixteenth) % pad.sequence.length;
           if (pad.sequence[currentStep] === null || pad.sequence[currentStep] === 'null') {
             this.triggerSynthNote(pad, firstNote, Tone.now());
           }
@@ -252,6 +377,13 @@ class AudioEngine {
       };
       this.recorder.stop();
     });
+  }
+
+  setPadVolume(id: number, volumeDb: number) {
+    if (!this.synths.has(id)) return;
+    const synth = this.synths.get(id)!;
+    // Tone.js volume is in decibels
+    synth.volume.rampTo(volumeDb, 0.1);
   }
 }
 
