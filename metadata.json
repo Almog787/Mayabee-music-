@@ -1,0 +1,8 @@
+{
+  "name": "Remix Byte Beats ALSH",
+  "description": "Byte Beats is an interactive music creation app that lets you generate 8-bit or 16-bit retro arcade beats and jam on a 8-pad grid. ",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

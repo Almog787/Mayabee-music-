@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <button id="start">Start All</button>
+  <button id="stop1">Stop 1</button>
+  <button id="start1">Start 1</button>
+  <script type="module">
+    import * as Tone from 'https://jspm.dev/tone';
+    let seq1, seq2, synth1, synth2;
+    document.getElementById('start').onclick = async () => {
+      await Tone.start();
+      synth1 = new Tone.Synth().toDestination();
+      synth2 = new Tone.Synth().toDestination();
+      seq1 = new Tone.Sequence((time, note) => {
+        synth1.triggerAttackRelease(note, "16n", time);
+        console.log('synth1');
+      }, ["C4", null, "E4", null], "8n");
+      seq2 = new Tone.Sequence((time, note) => {
+        synth2.triggerAttackRelease(note, "16n", time);
+        console.log('synth2');
+      }, [null, "D4", null, "F4"], "8n");
+      Tone.Transport.start();
+      seq1.start(0);
+      seq2.start(0);
+    };
+    document.getElementById('stop1').onclick = () => seq1.stop();
+    document.getElementById('start1').onclick = () => seq1.start(); // Try this!
+  </script>
+</body>
+</html>
