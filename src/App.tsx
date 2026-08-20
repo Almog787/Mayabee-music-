@@ -6,8 +6,8 @@ import { generateOfflineKit } from './kitGenerator';
 
 const TRANSLATIONS = {
   en: {
-    title: "Byte Beats",
-    subtitleWelcome: "Make your own retro 8-bit music beats! Pick a vibe, choose an emotion, and jam out on the pads. Play around with the effects to shape your sound.",
+    title: "Mayabee",
+    subtitleWelcome: "Make your own dynamic music beats! Pick a vibe, choose an emotion, and jam out on the pads. Play around with the effects to shape your sound.",
     subtitleReady: "Tap the pads below to start playing your music!",
     emotion: "EMOTION",
     vibe: "VIBE",
@@ -46,8 +46,8 @@ const TRANSLATIONS = {
     }
   },
   he: {
-    title: "בייט ביטס",
-    subtitleWelcome: "צרו מוזיקת 8-ביט רטרו משלכם בקלות! בחרו אווירה, בחרו רגש, ותתחילו לנגן על הפדים. שחקו עם האפקטים כדי לשנות את הסאונד.",
+    title: "Mayabee",
+    subtitleWelcome: "צרו מקצבי מוזיקה משלכם בקלות! בחרו אווירה, בחרו רגש, ותתחילו לנגן על הפדים. שחקו עם האפקטים כדי לשנות את הסאונד.",
     subtitleReady: "לחצו על הפדים למטה כדי להתחיל לנגן!",
     emotion: "רגש",
     vibe: "אווירה",
