@@ -272,57 +272,82 @@ class AudioEngine {
     }
   }
 
+  private targetVolumes: Map<number, number> = new Map();
+  private stopTimeouts: Map<number, NodeJS.Timeout> = new Map();
+
   playPad(id: number) {
-    if (this.activePadIds.has(id)) return;
+    const synth = this.synths.get(id);
+    if (!synth) return;
 
-    const pad = this.currentKit?.pads.find(p => p.id === id);
-    const firstNote = pad?.sequence.find(n => n && n !== 'null') || (pad?.type === 'drum' ? 'C1' : 'C4');
+    // Cancel any pending stop timeout
+    if (this.stopTimeouts.has(id)) {
+      clearTimeout(this.stopTimeouts.get(id)!);
+      this.stopTimeouts.delete(id);
+    }
 
-    if (this.getActivePadCount() === 0) {
+    const targetVol = this.targetVolumes.get(id) ?? -6;
+    
+    if (this.getActivePadCount() === 0 && !this.activePadIds.has(id)) {
       Tone.Transport.stop();
       Tone.Transport.position = "0:0:0";
-      // Start slightly in the future for better scheduling/timing
       Tone.Transport.start("+0.05");
-      this.activePadIds.add(id);
-
-      if (pad && firstNote && (pad.sequence[0] === null || pad.sequence[0] === 'null')) {
-        this.triggerSynthNote(pad, firstNote, Tone.now() + 0.05);
-      }
-    } else {
-      this.activePadIds.add(id);
-      if (pad && firstNote) {
-        try {
-          const parts = Tone.Transport.position.toString().split(':');
-          const beat = parseInt(parts[1] || "0", 10);
-          const sixteenth = parseInt(parts[2] || "0", 10);
-          const currentStep = (beat * 4 + sixteenth) % pad.sequence.length;
-          if (pad.sequence[currentStep] === null || pad.sequence[currentStep] === 'null') {
-            this.triggerSynthNote(pad, firstNote, Tone.now());
-          }
-        } catch (e) {
-          this.triggerSynthNote(pad, firstNote, Tone.now());
-        }
-      }
     }
+
+    if (!this.activePadIds.has(id)) {
+      synth.volume.value = -60;
+      this.activePadIds.add(id);
+    }
+    
+    // Smoothly fade in over a half note
+    synth.volume.rampTo(targetVol, "2n");
   }
 
   stopPad(id: number) {
-    this.activePadIds.delete(id);
-    if (this.getActivePadCount() === 0) {
-      Tone.Transport.stop();
-      Tone.Transport.position = "0:0:0";
+    const synth = this.synths.get(id);
+    if (!synth) {
+      this.activePadIds.delete(id);
+      return;
     }
+
+    // Fade out over a half note
+    synth.volume.rampTo(-60, "2n");
+    
+    // Schedule removal from active loop after fade finishes (approx 1000ms at 120bpm)
+    const timeout = setTimeout(() => {
+      this.activePadIds.delete(id);
+      if (this.getActivePadCount() === 0) {
+        Tone.Transport.stop();
+        Tone.Transport.position = "0:0:0";
+      }
+      this.stopTimeouts.delete(id);
+    }, 1000);
+    
+    this.stopTimeouts.set(id, timeout);
   }
 
   togglePad(id: number): boolean {
     const seq = this.sequences.get(id);
     if (!seq) return false;
-    if (this.activePadIds.has(id)) {
+    // We consider it "active" if it's in activePadIds AND not scheduled to stop
+    const isActuallyActive = this.activePadIds.has(id) && !this.stopTimeouts.has(id);
+    
+    if (isActuallyActive) {
       this.stopPad(id);
       return false;
     } else {
       this.playPad(id);
       return true;
+    }
+  }
+
+  setPadVolume(id: number, volumeDb: number) {
+    this.targetVolumes.set(id, volumeDb);
+    if (!this.synths.has(id)) return;
+    
+    const synth = this.synths.get(id)!;
+    // Only apply immediately if it's fully active (not stopping)
+    if (this.activePadIds.has(id) && !this.stopTimeouts.has(id)) {
+      synth.volume.rampTo(volumeDb, 0.1);
     }
   }
 
@@ -377,13 +402,6 @@ class AudioEngine {
       };
       this.recorder.stop();
     });
-  }
-
-  setPadVolume(id: number, volumeDb: number) {
-    if (!this.synths.has(id)) return;
-    const synth = this.synths.get(id)!;
-    // Tone.js volume is in decibels
-    synth.volume.rampTo(volumeDb, 0.1);
   }
 }
 
